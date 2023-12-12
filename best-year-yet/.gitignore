@@ -1,0 +1,6 @@
+audios/*
+transcriptions/*
+transcriptionsCleaned/*
+retrieval/*
+oauth2.token.json
+config.json

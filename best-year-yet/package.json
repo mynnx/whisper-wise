@@ -4,14 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "watch": "PORT=4000 nodemon index.js",
+    "watch-debug": "PORT=4000 nodemon --inspect index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.0",
+    "bottleneck": "^2.19.5",
     "dotenv": "^16.3.1",
-    "googleapis": "^39.2.0"
+    "googleapis": "^39.2.0",
+    "openai": "^4.20.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.54.0",
+    "nodemon": "^3.0.2",
+    "prettier": "^3.1.0"
   }
 }

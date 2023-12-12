@@ -11,69 +11,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-'use strict';
-
-const fs = require('fs');
-const path = require('path');
-const {google} = require('googleapis');
-const {authenticate} = require('@google-cloud/local-auth');
-
-const drive = google.drive('v3');
-
-async function runSample(query) {
-  // Obtain user credentials to use for the request
-  const auth = await authenticate({
-    keyfilePath: path.join(__dirname, './oauth2.keys.json'),
-    scopes: [
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/drive.appdata',
-        'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/drive.metadata',
-        'https://www.googleapis.com/auth/drive.metadata.readonly',
-        'https://www.googleapis.com/auth/drive.photos.readonly',
-        'https://www.googleapis.com/auth/drive.readonly',
-      ],
-  });
-  google.options({auth});
-  
-  const folderId = '1PwPeIRAqPLlumJJmGRgDD4S1OjqoJbzy';
-  
-  // List files in the folder
-  drive.files.list({
-  })
-  drive.files.list({
-    q: `'${folderId}' in parents`,
-    fields: 'files(id, name, mimeType)',
-  }).then(response => {
-    const files = response.data.files;
-  
-    // Download metadata and files
-    for (const file of files) {
-      // Download metadata
-      drive.files.get({
-        fileId: file.id,
-        // fields: 'modifiedTime, fileSize, mimeType',
-      }).then(metadataResponse => {
-        const metadata = metadataResponse.data;
-        console.log(`File metadata: ${JSON.stringify(metadata)}`);
-  
-        // Download file content
-        drive.files.get({
-          fileId: file.id,
-          alt: 'media',
-        }).then(fileResponse => {
-          // Save file content to local storage
-          const fileContent = fileResponse.data;
-          fs.writeFileSync(`./${file.name}`, fileContent);
-          console.log(`File downloaded: ${file.name}`);
-        });
-      });
-    }
-  });
-  
-}
+require("dotenv").config();
+const {
+  authenticateGoogleDrive,
+  downloadAllFilesInFolder,
+} = require("./downloadFiles");
+const { withRetrievalFile } = require("./retrievalFile");
+const { getTranscription } = require("./transcribe");
+const { cleanTranscription } = require("./cleanTranscription");
 
 if (module === require.main) {
-  runSample().catch(console.error);
+  authenticateGoogleDrive().then(async (auth) => {
+    const files = await downloadAllFilesInFolder({
+      auth,
+      folderId: "1PwPeIRAqPLlumJJmGRgDD4S1OjqoJbzy",
+    });
+    withRetrievalFile(async (retrievalStream) => {
+      await Promise.all(files.map(getTranscription));
+      const cleanedTranscriptions = await Promise.all(
+        files.map(cleanTranscription),
+      );
+      let currentMonth = null;
+      cleanedTranscriptions.forEach((transcription, index) => {
+        const createdTime = new Date(files[index].createdTime);
+        const month = createdTime.toLocaleString("en-US", {
+          timeZone: "America/Los_Angeles",
+          month: "long",
+        });
+
+        if (month !== currentMonth) {
+          retrievalStream.write(`# ${month}\n\n`);
+          currentMonth = month;
+        }
+
+        const formattedTime = createdTime.toLocaleString("en-US", {
+          timeZone: "America/Los_Angeles",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+
+        retrievalStream.write(`## ${formattedTime}\n\n${transcription}\n\n`);
+      });
+    });
+  });
 }
-module.exports = runSample;
